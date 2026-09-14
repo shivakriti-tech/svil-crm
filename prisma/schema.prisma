@@ -1,0 +1,478 @@
+// This is your Prisma schema file for SQLite (zero-dependency local database)
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ─────────────────────────────────────────────
+// CORE ENTITIES
+// ─────────────────────────────────────────────
+
+model User {
+  id          String      @id @default(cuid())
+  email       String      @unique
+  name        String
+  password    String
+  role        String      @default("SALES") // ADMIN, MANAGER, SALES, FINANCE, OPERATIONS
+  permissions String?     // JSON string storing granular per-module access: { [module]: { view, add, edit, delete } }
+  status      String      @default("ACTIVE") // ACTIVE, INACTIVE
+  lastLogin   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  inquiries   Inquiry[]
+  jobs        Job[]
+  statusLogs  StatusLog[]
+  remarks     Remark[]
+  quotations  Quotation[]
+}
+
+model Customer {
+  id            String      @id @default(cuid())
+  name          String      @unique
+  address       String?
+  country       String?     @default("India")
+  contactPerson String?
+  phone         String?
+  email         String?
+  employeeId    String?
+  employee      Employee?   @relation(fields: [employeeId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  inquiries     Inquiry[]
+  jobs          Job[]
+  quotations    Quotation[]
+}
+
+model Port {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  country   String?
+  code      String?
+  createdAt DateTime @default(now())
+}
+
+model Liner {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  code          String?
+  address       String?
+  country       String?
+  contactPerson String?
+  phone         String?
+  email         String?
+  createdAt     DateTime  @default(now())
+  inquiries     Inquiry[]
+  jobs          Job[]
+}
+
+model CHA {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  contact       String?  // legacy support
+  address       String?
+  country       String?  @default("India")
+  contactPerson String?
+  phone         String?
+  email         String?
+  createdAt     DateTime @default(now())
+  jobs          Job[]
+}
+
+model Airline {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  code          String?
+  address       String?
+  country       String?
+  contactPerson String?
+  phone         String?
+  email         String?
+  createdAt     DateTime @default(now())
+}
+
+model Transporter {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  address       String?
+  country       String?  @default("India")
+  contactPerson String?
+  phone         String?
+  email         String?
+  createdAt     DateTime @default(now())
+}
+
+model OverseasAgent {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  address       String?
+  country       String?
+  contactPerson String?
+  phone         String?
+  email         String?
+  createdAt     DateTime @default(now())
+}
+
+model Employee {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  displayName String?
+  userId      String?           @unique
+  createdAt   DateTime          @default(now())
+  customers   Customer[]
+  profile     EmployeeProfile?
+  attendances Attendance[]
+  payrolls    Payroll[]
+}
+
+// ─────────────────────────────────────────────
+// INQUIRY MODULE
+// ─────────────────────────────────────────────
+
+model Inquiry {
+  id              String   @id @default(cuid())
+  inquiryNo       Int      @unique
+  inquiryDate     DateTime
+  customerId      String
+  customer        Customer @relation(fields: [customerId], references: [id])
+  contactPerson   String?
+  phoneEmail      String?
+  pol             String
+  pod             String
+  commodity       String?
+  exim            String   @default("EX")
+  shipmentType    String   @default("FCL")
+  containerVolume String?
+  weightKgs       String?
+  shippingLineId  String?
+  shippingLine    Liner?   @relation(fields: [shippingLineId], references: [id])
+  rateSent        Boolean  @default(false)
+  quotedRate      String?
+  status          String   @default("IN_PROCESS")
+  responsibleId   String
+  responsible     User     @relation(fields: [responsibleId], references: [id])
+  remarks         String?
+  followUpDate    DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  job             Job?
+}
+
+// ─────────────────────────────────────────────
+// JOB / SHIPMENT MODULE
+// ─────────────────────────────────────────────
+
+model Job {
+  id            String    @id @default(cuid())
+  jobId         String    @unique // formatted: SVIL26-00001
+  legacyJobId   String?   // for migrated FE/FI/LI jobs
+  inquiryId     String?   @unique
+  inquiry       Inquiry?  @relation(fields: [inquiryId], references: [id])
+
+  // Parties (Mandatory on convert)
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  partyName     String
+  consignee     String?   // Consignee Name & Full Address
+  shipper       String?   // Shipper Name & Full Address
+  notifyParty   String?   // Notify Party Name & Full Address
+  responsibleId String?
+  responsible   User?     @relation(fields: [responsibleId], references: [id])
+
+  // Route & Locations (CAN & BL)
+  origin            String?   // Origin Port / City (e.g. Shenzhen, CNSZX)
+  pol               String    // Port of Loading
+  pod               String    // Port of Discharge
+  finalDestination  String?   // Final Destination (e.g. NHAVA SHEVA, INNSA)
+  placeOfAcceptance String?   // ICD AHMEDABAD, INDIA
+  placeOfDelivery   String?   // PORTKLANG, MALAYSIA
+
+  // CAN & BL Document Details
+  igmNo             String?   // e.g. 1200297
+  igmDate           DateTime? // e.g. 26/Jun/2026
+  mblNo             String?
+  mblDate           DateTime?
+  hblNo             String?
+  hblDate           DateTime?
+  forwarderHblNo    String?
+  carrierName       String?   // e.g. WAN HAI LINES (INDIA) PRIVATE LIMITED
+  cfsName           String?   // e.g. JWR LOGISTICS PRIVATE LIMITED
+  vesselName        String?   // e.g. WAN HAI 507
+  voyageNo          String?   // e.g. 244
+  vesselVoyage      String?   // e.g. WAN HAI 507 / 244
+  incoTerm          String?   // e.g. Ex Works, FOB, CIF
+  itemNo            String?   // e.g. 324
+  subItemNo         String?   // e.g. 7
+  shipmentTerms     String?   // e.g. LCL/LCL, FCL/FCL
+  deliveryAgent     String?   // Delivery agent name & contact
+  freightPayableAt  String?   // e.g. DESTINATION / ORIGIN
+  shippedOnBoardDate DateTime?
+
+  // Container & Cargo Details
+  containerType    String?
+  containerNo      String?   // e.g. WHSU6217432
+  sealNo           String?   // e.g. WHA2354488
+  packageType      String?   // e.g. 4 PACKAGE(S)
+  marksNumbers     String?   // e.g. SL MP 1 4 4
+  cargoDescription String?   // Full goods description
+  weightKgs        String?   // e.g. 740.000 KGS
+  volumeCbm        String?   // e.g. 1.900 CBM
+  grossWeight      String?   // e.g. 3,490.000 KGS
+  netWeight        String?   // e.g. 1,560.000 KGS
+  cargoItemsJson   String?   // JSON array for multiple containers / cargo lines
+
+  // Additional Operational Fields
+  svilInvoiceNo String?
+  scope         String    @default("[]") // JSON string of scope array
+  chaId         String?
+  cha           CHA?      @relation(fields: [chaId], references: [id])
+  linerId       String?
+  liner         Liner?    @relation(fields: [linerId], references: [id])
+  shipmentType  String?
+  fclLcl        String?
+  commodity     String?
+  volume        String?
+
+  // Dates
+  etd           DateTime?
+  eta           DateTime?
+
+  // Invoice Status & Tracking (Shrikar tracking requirement)
+  invoiceStatus String    @default("INVOICE_NOT_GENERATED") // INVOICE_GENERATED vs INVOICE_NOT_GENERATED
+  invoiceNo     String?
+  invoiceDate   DateTime?
+
+  // Status & Tracking
+  currentStatus String    @default("BOOKING_CONFIRMED")
+  attentionFlag Boolean   @default(false)
+  isCompleted   Boolean   @default(false)
+  statusLogs    StatusLog[]
+  remarksList   Remark[]
+
+  // Finance & Multi-Currency Billing
+  finance       Finance?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model StatusLog {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  oldStatus String?
+  newStatus String
+  changedBy String
+  user      User     @relation(fields: [changedBy], references: [id])
+  timestamp DateTime @default(now())
+  note      String?
+}
+
+model Remark {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  note      String
+  createdBy String
+  user      User     @relation(fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// FINANCE MODULE
+// ─────────────────────────────────────────────
+
+model Finance {
+  id               String   @id @default(cuid())
+  jobId            String   @unique
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Standard amounts (in INR)
+  buy              Float?   @default(0)
+  sale             Float?   @default(0)
+  cost             Float?   @default(0)
+  margin           Float?   @default(0)
+
+  // Multi-Currency Billing (USD & INR Auto-conversion)
+  buyUsd           Float?   @default(0)
+  saleUsd          Float?   @default(0)
+  exchangeRate     Float?   @default(87.5) // Live / Configured exchange rate
+  convertedSaleInr Float?   @default(0)   // Calculated converted amount in INR
+  billingItemsJson String?  // JSON array of billing charge rows
+
+  invoicingRef     String?
+  invoiceStatus    String   @default("INVOICE_NOT_GENERATED") // INVOICE_GENERATED vs INVOICE_NOT_GENERATED
+  invoiceNo        String?
+  invoiceDate      DateTime?
+  courier          String?
+  notes            String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// QUOTATION MODULE
+// ─────────────────────────────────────────────
+
+model Quotation {
+  id              String          @id @default(cuid())
+  quotationNo     String          @unique // e.g. SV00437
+  date            DateTime        @default(now())
+  validUntil      DateTime?
+  validUntilText  String?         // e.g. "6TH AUG"
+
+  // Company / Customer
+  companyName     String
+  customerId      String?
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  freightType     String          @default("Sea Freight") // Sea Freight, Air Freight, Inland Transport, Customs Clearance
+
+  // Shipment Details
+  originPort      String?         // e.g. MUNDRA
+  destinationPort String?         // e.g. COLOMBO
+  containerType   String?         // e.g. 40 FT, 20 FT, 40 HC, LCL
+  volumeWeight    String?         // e.g. 28 MT APX
+  commodity       String?
+
+  // Transit Time & Schedule
+  routing         String?         // e.g. MLO
+  vesselSchedule  String?         // e.g. VESSEL 16TH AUG
+  transitTime     String?         // e.g. 4 DAYS
+  freeDays        String?         // e.g. 14 DAYS
+  spaceAvailability String?       // e.g. SUBJECT TO SPACE AVAILABILITY
+
+  // Notes & Status
+  notes           String?
+  status          String          @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED, EXPIRED
+
+  // Charges Breakdown (4 Columns)
+  items           QuotationItem[]
+
+  createdById     String?
+  createdBy       User?           @relation(fields: [createdById], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model QuotationItem {
+  id                String    @id @default(cuid())
+  quotationId       String
+  quotation         Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  
+  chargeDescription String    // Column 1: CHARGE DESCRIPTION (Sea Freight, THC, SEAL, etc.)
+  rateCurrency      String    @default("USD") // USD, INR, EUR, etc.
+  rateAmount        String    // Column 2: RATE (USD 510, INR 18500, etc.)
+  unit              String    // Column 3: REMARKS/UNITS (Per CONTAINER, Per BL, Per CBM, Per KG, Per TRUCK, Per SET, At Actual)
+  remarks           String?   // Column 4: TEXT BOX FOR REMARKS/NOTES
+  
+  orderIndex        Int       @default(0)
+  createdAt         DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────────
+// HR & PAYROLL MODULE
+// ─────────────────────────────────────────────
+
+model EmployeeProfile {
+  id              String    @id @default(cuid())
+  employeeId      String    @unique
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  employeeCode    String?   // e.g. SV-EMP-001
+  designation     String?   // e.g. Logistics Executive / Sales Manager
+  department      String?   // e.g. Operations / Sales / Finance / Documentation
+  dateOfJoining   DateTime?
+  phone           String?
+  email           String?
+  address         String?
+  panNo           String?
+  aadharNo        String?
+  
+  // Bank Information for Salary Transfer
+  bankName        String?
+  bankAccountNo   String?
+  ifscCode        String?
+  branchName      String?
+
+  // Salary Structure (Monthly in INR)
+  basicSalary     Float     @default(0)
+  hra             Float     @default(0)
+  conveyance      Float     @default(0)
+  allowances      Float     @default(0)
+  pfDeduction     Float     @default(0)
+  taxDeduction    Float     @default(0)
+  netSalary       Float     @default(0)
+  
+  status          String    @default("ACTIVE") // ACTIVE, INACTIVE, RESIGNED
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Attendance {
+  id              String    @id @default(cuid())
+  employeeId      String
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  date            DateTime  // Date of attendance
+  dateString      String    // "YYYY-MM-DD" for rapid indexed lookup
+  status          String    @default("PRESENT") // PRESENT, ABSENT, HALF_DAY, ON_LEAVE, HOLIDAY
+  
+  checkIn         String?   // e.g. "09:30 AM"
+  checkOut        String?   // e.g. "06:30 PM"
+  overtimeHours   Float     @default(0)
+  remarks         String?   // e.g. "Late entry", "Sick leave", "Approved leave"
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([employeeId, dateString])
+}
+
+model Payroll {
+  id                  String    @id @default(cuid())
+  employeeId          String
+  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  month               String    // e.g. "2026-08"
+  workingDays         Int       @default(30)
+  presentDays         Float     @default(30)
+  absentDays          Float     @default(0)
+  halfDays            Float     @default(0)
+  paidDays            Float     @default(30)
+
+  // Earnings
+  basicSalary         Float     @default(0)
+  hra                 Float     @default(0)
+  allowances          Float     @default(0)
+  bonusIncentive      Float     @default(0)
+  grossSalary         Float     @default(0)
+
+  // Deductions
+  absentDeduction     Float     @default(0)
+  pfDeduction         Float     @default(0)
+  taxDeduction        Float     @default(0)
+  otherDeduction      Float     @default(0)
+  totalDeductions     Float     @default(0)
+
+  // Final Payout
+  netSalary           Float     @default(0)
+  paymentStatus       String    @default("PENDING") // PENDING, PROCESSED, PAID
+  paymentDate         DateTime?
+  paymentMode         String    @default("BANK_TRANSFER") // BANK_TRANSFER, CHEQUE, CASH
+  transactionRef      String?
+  remarks             String?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([employeeId, month])
+}
+
+
