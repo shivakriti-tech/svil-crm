@@ -116,59 +116,159 @@ export default function ReportsPage() {
     });
   }, [data, shipmentStatusFilter, shipmentSearch]);
 
-  // Export Shipment Summary to CSV
-  const handleExportShipmentCSV = () => {
-    if (!filteredShipments.length) return;
-    const headers = [
-      "Job ID",
-      "Party Name",
-      "Consignee",
-      "Shipper",
-      "POL",
-      "POD",
-      "Carrier / Liner",
-      "Vessel / Voyage",
-      "ETD",
-      "ETA",
-      "Current Status",
-      "Invoice Status",
-      "Invoice No",
-      "Responsible",
-      "Billing (USD)",
-      "Billing (INR)",
-      "Cost (INR)",
-      "Margin (INR)",
+  // Export Lead Conversion Report to Excel
+  const handleExportLeadConversion = async () => {
+    if (!data?.leadConversion) return;
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Inquiries Tracking
+    const inqRows = (data.leadConversion.inquiries || []).map((inq: any) => ({
+      "Inquiry #": inq.inquiryNo,
+      "Date": formatDate(inq.inquiryDate),
+      "Customer": inq.customer,
+      "Route": inq.route,
+      "Type": inq.shipmentType,
+      "EXIM": inq.exim,
+      "Rate Sent": inq.rateSent ? "Sent" : "Pending",
+      "Quoted Rate": inq.quotedRate || "—",
+      "Responsible": inq.responsible,
+      "Status": getStatusLabel(inq.status),
+      "Conversion": inq.jobId ? `Won (${inq.jobId})` : inq.status === "CLOSE" ? "Lost" : "In Pipeline",
+      "Job ID": inq.jobId || "",
+    }));
+    const wsInq = XLSX.utils.json_to_sheet(inqRows);
+    XLSX.utils.book_append_sheet(wb, wsInq, "Inquiries Tracking");
+
+    // Sheet 2: Conversion KPIs
+    const kpiRows = [
+      { Metric: "Total Inquiries Received", Value: data.leadConversion.totalInquiries },
+      { Metric: "Rates / Quotes Sent", Value: data.leadConversion.rateSentInquiries },
+      { Metric: "Quote Sent Rate", Value: `${data.leadConversion.rateSentRate}%` },
+      { Metric: "Jobs Won / Booked", Value: data.leadConversion.bookedInquiries },
+      { Metric: "Lead Conversion Rate", Value: `${data.leadConversion.overallConversionRate}%` },
+      { Metric: "Active Window", Value: `${fromDate} to ${toDate}` },
     ];
+    const wsKpi = XLSX.utils.json_to_sheet(kpiRows);
+    XLSX.utils.book_append_sheet(wb, wsKpi, "Conversion KPIs");
 
-    const rows = filteredShipments.map((s: any) => [
-      `"${s.jobId || ""}"`,
-      `"${s.partyName || ""}"`,
-      `"${(s.consignee || "").replace(/"/g, '""')}"`,
-      `"${(s.shipper || "").replace(/"/g, '""')}"`,
-      `"${s.pol || ""}"`,
-      `"${s.pod || ""}"`,
-      `"${s.carrier || ""}"`,
-      `"${s.vesselVoyage || ""}"`,
-      `"${s.etd ? s.etd.slice(0, 10) : ""}"`,
-      `"${s.eta ? s.eta.slice(0, 10) : ""}"`,
-      `"${getStatusLabel(s.currentStatus)}"`,
-      `"${s.invoiceStatus === "INVOICE_GENERATED" ? "Invoice Raised" : "Pending Invoice"}"`,
-      `"${s.invoiceNo || ""}"`,
-      `"${s.responsible || ""}"`,
-      s.saleUsd || 0,
-      s.saleInr || 0,
-      s.buyInr || 0,
-      s.margin || 0,
-    ]);
+    // Sheet 3: Top Customer Conversion
+    if (data.leadConversion.topCustomerConversion?.length > 0) {
+      const custRows = data.leadConversion.topCustomerConversion.map((c: any) => ({
+        "Customer Name": c.name,
+        "Total Inquiries": c.total,
+        "Jobs Won": c.booked,
+        "Conversion Rate": `${c.conversionRate}%`,
+      }));
+      const wsCust = XLSX.utils.json_to_sheet(custRows);
+      XLSX.utils.book_append_sheet(wb, wsCust, "Customer Breakdown");
+    }
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e: (string | number)[]) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `SVIL_Shipment_Summary_${fromDate}_to_${toDate}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    XLSX.writeFile(wb, `SVIL_Lead_Conversion_Report_${fromDate}_to_${toDate}.xlsx`);
+  };
+
+  // Export Employee Performance Report to Excel
+  const handleExportEmployeePerformance = async () => {
+    if (!data?.employeePerformance?.length) return;
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+
+    const empRows = data.employeePerformance.map((emp: any) => ({
+      "Employee Name": emp.name,
+      "Role": emp.role,
+      "Email": emp.email,
+      "Inquiries Assigned": emp.inquiriesTotal,
+      "Quotes Sent": emp.inquiriesRateSent,
+      "Jobs Won (Booked)": emp.inquiriesBooked,
+      "Conversion Rate": `${emp.conversionRate}%`,
+      "Active Shipments": emp.jobsActive,
+      "Completed Shipments": emp.jobsCompleted,
+      "Revenue INR": emp.totalRevenueInr,
+      "Revenue USD": emp.totalRevenueUsd,
+      "Freight Cost INR": emp.totalCostInr,
+      "Net Margin INR": emp.totalMarginInr,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(empRows);
+    XLSX.utils.book_append_sheet(wb, ws, "Employee Scorecard");
+    XLSX.writeFile(wb, `SVIL_Employee_Performance_Report_${fromDate}_to_${toDate}.xlsx`);
+  };
+
+  // Export Financial & Status Overview to Excel
+  const handleExportFinancialOverview = async () => {
+    if (!data?.summary) return;
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+
+    const summaryRows = [
+      { Metric: "Report Period", Value: `${fromDate} to ${toDate}` },
+      { Metric: "Total Revenue (INR)", Value: data.summary.revenueInr },
+      { Metric: "Total Revenue (USD)", Value: data.summary.revenueUsd },
+      { Metric: "Total Cost of Freight (INR)", Value: data.summary.costInr },
+      { Metric: "Net Profit Margin (INR)", Value: data.summary.marginInr },
+      { Metric: "Total Inquiries (Period)", Value: data.summary.totalInquiries },
+      { Metric: "Booked Inquiries (Period)", Value: data.summary.bookedInquiries },
+      { Metric: "Lead Conversion Rate", Value: `${data.summary.overallConversionRate}%` },
+      { Metric: "Total Shipments (Period)", Value: data.summary.totalShipments },
+      { Metric: "Active / In-Transit Shipments", Value: data.summary.activeShipments },
+      { Metric: "Delivered / Completed Shipments", Value: data.summary.completedShipments },
+      { Metric: "Invoiced Shipments", Value: data.summary.invoicedShipments },
+      { Metric: "All Active Jobs (System-wide)", Value: data.summary.allActiveJobsSystem },
+      { Metric: "All Overdue Jobs (System-wide)", Value: data.summary.allOverdueJobsSystem },
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Financial Overview");
+
+    if (data.shipmentSummary?.statusDistribution?.length > 0) {
+      const statusRows = data.shipmentSummary.statusDistribution.map((st: any) => ({
+        "Status": getStatusLabel(st.status),
+        "Shipment Count": st.count,
+      }));
+      const wsStatus = XLSX.utils.json_to_sheet(statusRows);
+      XLSX.utils.book_append_sheet(wb, wsStatus, "Status Distribution");
+    }
+
+    if (data.shipmentSummary?.carrierDistribution?.length > 0) {
+      const carrierRows = data.shipmentSummary.carrierDistribution.map((c: any) => ({
+        "Carrier / Shipping Line": c.carrier,
+        "Shipment Count": c.count,
+      }));
+      const wsCarrier = XLSX.utils.json_to_sheet(carrierRows);
+      XLSX.utils.book_append_sheet(wb, wsCarrier, "Carrier Distribution");
+    }
+
+    XLSX.writeFile(wb, `SVIL_Financial_Status_Overview_${fromDate}_to_${toDate}.xlsx`);
+  };
+
+  // Export Shipment Summary to Excel / CSV
+  const handleExportShipmentCSV = async () => {
+    if (!filteredShipments.length) return;
+    const XLSX = await import("xlsx");
+    const rows = filteredShipments.map((s: any) => ({
+      "Job ID": s.jobId || "",
+      "Party Name": s.partyName || "",
+      "Consignee": s.consignee || "",
+      "Shipper": s.shipper || "",
+      "POL": s.pol || "",
+      "POD": s.pod || "",
+      "Carrier / Liner": s.carrier || "",
+      "Vessel / Voyage": s.vesselVoyage || "",
+      "ETD": formatDate(s.etd),
+      "ETA": formatDate(s.eta),
+      "Current Status": getStatusLabel(s.currentStatus),
+      "Invoice Status": s.invoiceStatus === "INVOICE_GENERATED" ? "Invoice Raised" : "Pending Invoice",
+      "Invoice No": s.invoiceNo || "",
+      "Responsible": s.responsible || "",
+      "Billing (USD)": s.saleUsd || 0,
+      "Billing (INR)": s.saleInr || 0,
+      "Cost (INR)": s.buyInr || 0,
+      "Margin (INR)": s.margin || 0,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Shipments");
+    XLSX.writeFile(wb, `SVIL_Shipment_Summary_${fromDate}_to_${toDate}.xlsx`);
   };
 
   return (
@@ -420,13 +520,25 @@ export default function ReportsPage() {
 
               {/* Detailed Lead Breakdown Table */}
               <div className="glass-card" style={{ padding: "20px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
                   <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-main)", margin: 0, textTransform: "uppercase" }}>
                     Recent Inquiries &amp; Conversion Tracking
                   </h3>
-                  <Link href="/inquiries" className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>
-                    Open Inquiries Kanban &rarr;
-                  </Link>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                    <button
+                      onClick={handleExportLeadConversion}
+                      className="btn btn-secondary btn-sm"
+                      style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700 }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+                      </svg>
+                      Export Excel
+                    </button>
+                    <Link href="/inquiries" className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>
+                      Open Inquiries Kanban &rarr;
+                    </Link>
+                  </div>
                 </div>
                 <div className="table-responsive">
                   <table className="data-table">
@@ -564,9 +676,21 @@ export default function ReportsPage() {
 
               {/* Comprehensive Employee Table */}
               <div className="glass-card" style={{ padding: "20px" }}>
-                <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-main)", marginBottom: "16px", textTransform: "uppercase" }}>
-                  Complete Employee Scorecard
-                </h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+                  <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-main)", margin: 0, textTransform: "uppercase" }}>
+                    Complete Employee Scorecard
+                  </h3>
+                  <button
+                    onClick={handleExportEmployeePerformance}
+                    className="btn btn-secondary btn-sm"
+                    style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700 }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+                    </svg>
+                    Export Excel
+                  </button>
+                </div>
                 <div className="table-responsive">
                   <table className="data-table">
                     <thead>
@@ -827,6 +951,27 @@ export default function ReportsPage() {
              ───────────────────────────────────────────── */}
           {activeTab === "overview" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                <div>
+                  <h3 style={{ fontSize: "1rem", fontWeight: 800, color: "var(--text-main)", margin: 0, textTransform: "uppercase" }}>
+                    Financial &amp; Status Overview
+                  </h3>
+                  <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>
+                    Consolidated revenue, freight costs, profit margins, and operational metrics for active period.
+                  </p>
+                </div>
+                <button
+                  onClick={handleExportFinancialOverview}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+                  </svg>
+                  Export Financial Overview (Excel)
+                </button>
+              </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
                 <KpiCard title="Total Revenue (Sale)" value={fmtCurrency(data.summary.revenueInr)} subtitle={`${fmtUsd(data.summary.revenueUsd)} USD`} color="#10b981" highlight />
                 <KpiCard title="Total Cost of Freight" value={fmtCurrency(data.summary.costInr)} subtitle="Buy + local clearance costs" color="#f97316" />

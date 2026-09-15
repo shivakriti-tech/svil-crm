@@ -335,7 +335,7 @@ export async function GET(request: Request) {
         conversionByExim,
         conversionByType,
         topCustomerConversion,
-        inquiries: inquiriesInPeriod.slice(0, 50).map((i) => ({
+        inquiries: inquiriesInPeriod.map((i) => ({
           id: i.id,
           inquiryNo: i.inquiryNo,
           inquiryDate: i.inquiryDate,
