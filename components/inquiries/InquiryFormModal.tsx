@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 const STATUSES = [
   { value: "IN_PROCESS", label: "In Process" },
   { value: "BOOKED", label: "Booked" },
+  { value: "NOT_INTERESTED", label: "Not Interested" },
+  { value: "COSTING_PURPOSE", label: "Costing Purpose" },
   { value: "CLOSE", label: "Closed" },
   { value: "NO_SERVICE", label: "No Service" },
   { value: "RATE_NOT_GIVEN", label: "Rate Not Given" },
@@ -15,8 +17,10 @@ const STATUSES = [
   { value: "REMARK", label: "Remark" },
 ];
 
-const EXIM = ["EX", "IM", "EXIM", "Trns", "Clr", "C_T"];
-const SHIPMENT = ["FCL", "LCL", "Air"];
+const EXIM = ["EX", "IM", "EXIM", "Trns", "Clr", "Insurance"];
+const SHIPMENT = ["FCL", "LCL", "Air", "Courier"];
+const INCO_TERMS = ["CFI", "FOB", "DDP", "FCA", "DDU", "EXW", "DAP", "Other"];
+const INQUIRY_TYPES = ["Export", "Import"];
 
 export default function InquiryFormModal({
   inquiry,
@@ -45,6 +49,8 @@ export default function InquiryFormModal({
     commodity: inquiry?.commodity ?? "",
     exim: inquiry?.exim ?? "EX",
     shipmentType: inquiry?.shipmentType ?? "FCL",
+    incoTerms: inquiry?.incoTerms ?? "",
+    inquiryType: inquiry?.inquiryType ?? "Export",
     containerVolume: inquiry?.containerVolume ?? "",
     weightKgs: inquiry?.weightKgs ?? "",
     shippingLineId: inquiry?.shippingLine?.id ?? "",
@@ -58,6 +64,23 @@ export default function InquiryFormModal({
 
   const set = (key: string, value: any) => setForm((f) => ({ ...f, [key]: value }));
 
+  // Auto-populate customer details on customer selection
+  const handleCustomerChange = (val: string) => {
+    const matched = (masters.customers || []).find(
+      (c: any) => c.name?.trim().toLowerCase() === val?.trim().toLowerCase()
+    );
+    if (matched) {
+      setForm((f) => ({
+        ...f,
+        customerName: val,
+        contactPerson: matched.contactPerson || f.contactPerson || "",
+        phoneEmail: matched.phone || matched.email || f.phoneEmail || "",
+      }));
+    } else {
+      set("customerName", val);
+    }
+  };
+
   // Deduplicate users/employees by name so each person appears exactly once in the dropdown
   const uniqueUsers: any[] = Array.from(
     new Map((masters.users || []).map((u: any) => [u.name.trim().toLowerCase(), u])).values()
@@ -65,8 +88,8 @@ export default function InquiryFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.customerName || !form.pol || !form.pod) {
-      setError("Customer, POL, and POD are required");
+    if (!form.customerName?.trim()) {
+      setError("Customer Name is required");
       return;
     }
     setLoading(true);
@@ -90,12 +113,10 @@ export default function InquiryFormModal({
     }
   };
 
-  const inputStyle = { marginBottom: "0" };
-
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-content" style={{ maxWidth: "720px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+      <div className="modal-content" style={{ maxWidth: "720px", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <h2 style={{ fontSize: "1.125rem", fontWeight: 800, color: "var(--text-main)" }}>
             {isEdit ? "Edit Inquiry" : "New Inquiry"}
           </h2>
@@ -114,14 +135,14 @@ export default function InquiryFormModal({
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-            <FormField label="Customer Name *" required>
+            <FormField label="Customer Name" required>
               <input
                 id="inq-customer"
                 list="customer-list"
                 className="form-input"
                 value={form.customerName}
-                onChange={(e) => set("customerName", e.target.value)}
-                placeholder="Type customer name..."
+                onChange={(e) => handleCustomerChange(e.target.value)}
+                placeholder="Type or select customer..."
                 required
               />
               <datalist id="customer-list">
@@ -131,7 +152,7 @@ export default function InquiryFormModal({
               </datalist>
             </FormField>
 
-            <FormField label="Inquiry Date *">
+            <FormField label="Inquiry Date" required>
               <input
                 id="inq-date"
                 type="date"
@@ -143,37 +164,74 @@ export default function InquiryFormModal({
             </FormField>
 
             <FormField label="Contact Person">
-              <input id="inq-contact" className="form-input" value={form.contactPerson} onChange={(e) => set("contactPerson", e.target.value)} />
+              <input
+                id="inq-contact"
+                className="form-input"
+                placeholder="Auto-filled or enter contact..."
+                value={form.contactPerson}
+                onChange={(e) => set("contactPerson", e.target.value)}
+              />
             </FormField>
 
             <FormField label="Phone / Email">
-              <input id="inq-phone" className="form-input" value={form.phoneEmail} onChange={(e) => set("phoneEmail", e.target.value)} />
+              <input
+                id="inq-phone"
+                className="form-input"
+                placeholder="Auto-filled or enter phone/email..."
+                value={form.phoneEmail}
+                onChange={(e) => set("phoneEmail", e.target.value)}
+              />
             </FormField>
 
-            <FormField label="POL (Port of Loading) *">
+            <FormField label="Type of Inquiry">
+              <select
+                id="inq-type"
+                className="form-input"
+                value={form.inquiryType}
+                onChange={(e) => set("inquiryType", e.target.value)}
+              >
+                {INQUIRY_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Inco Terms">
+              <select
+                id="inq-incoterms"
+                className="form-input"
+                value={form.incoTerms}
+                onChange={(e) => set("incoTerms", e.target.value)}
+              >
+                <option value="">— Select Inco Terms (Optional) —</option>
+                {INCO_TERMS.map((inc) => (
+                  <option key={inc} value={inc}>{inc}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="POL (Port of Loading)">
               <input
                 id="inq-pol"
                 list="port-list"
                 className="form-input"
                 value={form.pol}
                 onChange={(e) => set("pol", e.target.value)}
-                placeholder="e.g. Mundra"
-                required
+                placeholder="e.g. Mundra (Optional)"
               />
               <datalist id="port-list">
                 {masters.ports?.map((p: any) => <option key={p.id} value={p.name} />)}
               </datalist>
             </FormField>
 
-            <FormField label="POD (Port of Discharge) *">
+            <FormField label="POD (Port of Discharge)">
               <input
                 id="inq-pod"
                 list="port-list-2"
                 className="form-input"
                 value={form.pod}
                 onChange={(e) => set("pod", e.target.value)}
-                placeholder="e.g. Shanghai"
-                required
+                placeholder="e.g. Shanghai (Optional)"
               />
               <datalist id="port-list-2">
                 {masters.ports?.map((p: any) => <option key={p.id} value={p.name} />)}
@@ -193,7 +251,7 @@ export default function InquiryFormModal({
             </FormField>
 
             <FormField label="Commodity">
-              <input id="inq-commodity" className="form-input" value={form.commodity} onChange={(e) => set("commodity", e.target.value)} />
+              <input id="inq-commodity" className="form-input" placeholder="e.g. Ceramic Tiles" value={form.commodity} onChange={(e) => set("commodity", e.target.value)} />
             </FormField>
 
             <FormField label="Container / Volume">
@@ -201,7 +259,7 @@ export default function InquiryFormModal({
             </FormField>
 
             <FormField label="Weight (KGS)">
-              <input id="inq-weight" className="form-input" value={form.weightKgs} onChange={(e) => set("weightKgs", e.target.value)} />
+              <input id="inq-weight" className="form-input" placeholder="e.g. 28000" value={form.weightKgs} onChange={(e) => set("weightKgs", e.target.value)} />
             </FormField>
 
             <FormField label="Shipping Line">
@@ -224,7 +282,7 @@ export default function InquiryFormModal({
                   checked={form.rateSent}
                   onChange={(e) => set("rateSent", e.target.checked)}
                 />
-                <label htmlFor="inq-rate-sent" style={{ fontSize: "0.875rem", color: "var(--text-main)", fontWeight: 600 }}>
+                <label htmlFor="inq-rate-sent" style={{ fontSize: "0.875rem", color: "var(--text-main)", fontWeight: 600, cursor: "pointer" }}>
                   Rate Sent to Client
                 </label>
               </div>
@@ -236,7 +294,7 @@ export default function InquiryFormModal({
               </select>
             </FormField>
 
-            <FormField label="Responsible Employee *">
+            <FormField label="Responsible Employee" required>
               <select id="inq-responsible" className="form-input" value={form.responsibleId} onChange={(e) => set("responsibleId", e.target.value)} required>
                 <option value="">— Select Employee —</option>
                 {uniqueUsers.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -262,6 +320,7 @@ export default function InquiryFormModal({
                   value={form.remarks}
                   onChange={(e) => set("remarks", e.target.value)}
                   style={{ resize: "vertical" }}
+                  placeholder="Internal notes or inquiry remarks..."
                 />
               </FormField>
             </div>

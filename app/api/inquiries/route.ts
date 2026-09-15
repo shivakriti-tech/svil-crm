@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
   const responsible = searchParams.get("responsible") ?? "";
-  const month = searchParams.get("month"); // "2026-04"
+  const fromDate = searchParams.get("fromDate");
+  const toDate = searchParams.get("toDate");
+  const month = searchParams.get("month"); // fallback support
   const followup = searchParams.get("followup") === "true";
 
   const where: any = {};
@@ -23,6 +25,8 @@ export async function GET(req: NextRequest) {
       { pol: { contains: search, mode: "insensitive" } },
       { pod: { contains: search, mode: "insensitive" } },
       { commodity: { contains: search, mode: "insensitive" } },
+      { incoTerms: { contains: search, mode: "insensitive" } },
+      { inquiryType: { contains: search, mode: "insensitive" } },
     ];
   }
 
@@ -34,25 +38,24 @@ export async function GET(req: NextRequest) {
     where.status = { not: "CLOSE" };
   }
 
-  // Month filtering logic
-  if (month && month !== "all" && month.trim() !== "") {
+  // Date range filtering logic (from/to takes priority, then month)
+  if (fromDate || toDate) {
+    where.inquiryDate = {};
+    if (fromDate) where.inquiryDate.gte = new Date(fromDate);
+    if (toDate) {
+      const t = new Date(toDate);
+      t.setHours(23, 59, 59, 999);
+      where.inquiryDate.lte = t;
+    }
+  } else if (month && month !== "all" && month.trim() !== "") {
     const [year, mon] = month.split("-").map(Number);
     where.inquiryDate = {
       gte: new Date(year, mon - 1, 1),
       lt: new Date(year, mon, 1),
     };
-  } else if (month === "all" || month === "") {
-    // Explicit "All Months": No date filter applied, fetch all historical records
-  } else if (!followup && month === undefined) {
-    // Default fallback only if month param is completely omitted
-    const now = new Date();
-    where.inquiryDate = {
-      gte: new Date(now.getFullYear(), now.getMonth(), 1),
-      lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
-    };
   }
 
-  // Fetch inquiries, total count, and workload aggregation in parallel
+  // Fetch inquiries, total count, and workload aggregation in parallel (LIFO order: newest created first)
   const [items, total, workloadRaw, usersList] = await Promise.all([
     prisma.inquiry.findMany({
       where,
@@ -62,7 +65,7 @@ export async function GET(req: NextRequest) {
         shippingLine: { select: { id: true, name: true } },
         job: { select: { id: true, jobId: true } },
       },
-      orderBy: { inquiryDate: "desc" },
+      orderBy: [{ inquiryDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -70,7 +73,14 @@ export async function GET(req: NextRequest) {
     prisma.inquiry.groupBy({
       by: ["responsibleId", "status"],
       where: {
-        ...(month && month !== "all" && month.trim() !== ""
+        ...(fromDate || toDate
+          ? {
+              inquiryDate: {
+                ...(fromDate ? { gte: new Date(fromDate) } : {}),
+                ...(toDate ? { lte: new Date(new Date(toDate).setHours(23, 59, 59, 999)) } : {}),
+              },
+            }
+          : month && month !== "all" && month.trim() !== ""
           ? {
               inquiryDate: {
                 gte: new Date(Number(month.split("-")[0]), Number(month.split("-")[1]) - 1, 1),
@@ -158,21 +168,23 @@ export async function POST(req: NextRequest) {
       inquiryNo,
       inquiryDate: new Date(body.inquiryDate),
       customerId: customer.id,
-      contactPerson: body.contactPerson,
-      phoneEmail: body.phoneEmail,
-      pol: body.pol,
-      pod: body.pod,
-      commodity: body.commodity,
+      contactPerson: body.contactPerson || null,
+      phoneEmail: body.phoneEmail || null,
+      pol: body.pol || null,
+      pod: body.pod || null,
+      commodity: body.commodity || null,
       exim: body.exim ?? "EX",
       shipmentType: body.shipmentType ?? "FCL",
-      containerVolume: body.containerVolume,
-      weightKgs: body.weightKgs,
+      incoTerms: body.incoTerms || null,
+      inquiryType: body.inquiryType || "Export",
+      containerVolume: body.containerVolume || null,
+      weightKgs: body.weightKgs || null,
       shippingLineId: body.shippingLineId || null,
       rateSent: body.rateSent ?? false,
-      quotedRate: body.quotedRate,
+      quotedRate: body.quotedRate || null,
       status: body.status ?? "IN_PROCESS",
       responsibleId: body.responsibleId,
-      remarks: body.remarks,
+      remarks: body.remarks || null,
       followUpDate: body.followUpDate ? new Date(body.followUpDate) : null,
     },
     include: {

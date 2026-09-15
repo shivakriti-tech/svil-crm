@@ -135,31 +135,33 @@ model Employee {
 // ─────────────────────────────────────────────
 
 model Inquiry {
-  id              String   @id @default(cuid())
-  inquiryNo       Int      @unique
+  id              String    @id @default(cuid())
+  inquiryNo       Int       @unique
   inquiryDate     DateTime
   customerId      String
-  customer        Customer @relation(fields: [customerId], references: [id])
+  customer        Customer  @relation(fields: [customerId], references: [id])
   contactPerson   String?
   phoneEmail      String?
-  pol             String
-  pod             String
+  pol             String?
+  pod             String?
   commodity       String?
-  exim            String   @default("EX")
-  shipmentType    String   @default("FCL")
+  exim            String    @default("EX")
+  shipmentType    String    @default("FCL")
   containerVolume String?
   weightKgs       String?
+  incoTerms       String?
+  inquiryType     String?   @default("Export")
   shippingLineId  String?
-  shippingLine    Liner?   @relation(fields: [shippingLineId], references: [id])
-  rateSent        Boolean  @default(false)
+  shippingLine    Liner?    @relation(fields: [shippingLineId], references: [id])
+  rateSent        Boolean   @default(false)
   quotedRate      String?
-  status          String   @default("IN_PROCESS")
+  status          String    @default("IN_PROCESS")
   responsibleId   String
-  responsible     User     @relation(fields: [responsibleId], references: [id])
+  responsible     User      @relation(fields: [responsibleId], references: [id])
   remarks         String?
   followUpDate    DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   job             Job?
 }
 

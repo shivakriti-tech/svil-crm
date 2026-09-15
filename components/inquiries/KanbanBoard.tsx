@@ -8,6 +8,8 @@ const KANBAN_COLUMNS = [
   { status: "BOOKED", label: "Booked / Won", color: "#10b981", chipClass: "chip-success" },
   { status: "RATE_NOT_GIVEN", label: "Rate Pending", color: "#f59e0b", chipClass: "chip-warning" },
   { status: "RATE_UNMATCHED", label: "Rate Unmatched", color: "#f97316", chipClass: "chip-warning" },
+  { status: "COSTING_PURPOSE", label: "Costing Purpose", color: "#8b5cf6", chipClass: "chip-purple" },
+  { status: "NOT_INTERESTED", label: "Not Interested", color: "#64748b", chipClass: "chip-gray" },
   { status: "CARGO_NOT_READY", label: "Cargo Not Ready", color: "#a855f7", chipClass: "chip-purple" },
   { status: "VESSEL_MISSED", label: "Vessel Missed", color: "#ef4444", chipClass: "chip-danger" },
   { status: "SHIFT_NEXT_DATE", label: "Shifted Date", color: "#0284c7", chipClass: "chip-primary" },

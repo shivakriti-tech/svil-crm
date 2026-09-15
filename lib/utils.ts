@@ -48,6 +48,8 @@ const STATUS_LABELS: Record<string, string> = {
   CARGO_NOT_READY: "Cargo Not Ready",
   VESSEL_MISSED: "Vessel Missed",
   SHIFT_NEXT_DATE: "Shift Next Date",
+  NOT_INTERESTED: "Not Interested",
+  COSTING_PURPOSE: "Costing Purpose",
   REMARK: "Remark",
 
   // Complete 15 Job / Daily Shipment Statuses
@@ -105,6 +107,8 @@ export function getStatusColor(status: string): string {
     case "CARGO_NOT_READY": return "badge-yellow";
     case "VESSEL_MISSED": return "badge-red";
     case "SHIFT_NEXT_DATE": return "badge-purple";
+    case "NOT_INTERESTED": return "badge-gray";
+    case "COSTING_PURPOSE": return "badge-blue";
     case "REMARK": return "badge-gray";
 
     // 15 Job / Daily Statuses

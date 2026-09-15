@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { generateQuotationPdf } from "@/lib/quotationPdf";
 
 const CHARGE_PRESETS = [
@@ -88,6 +88,53 @@ export default function InquiryQuotationModal({
     { chargeDescription: "SEAL", rateCurrency: "INR", rateAmount: "900", unit: "Per CONTAINER", remarks: "Bottle Seal" },
     { chargeDescription: "BL CHARGES", rateCurrency: "INR", rateAmount: "5300", unit: "Per BL", remarks: "Documentation" },
   ]);
+
+  // Load latest/recent quotation if one exists for this customer
+  useEffect(() => {
+    async function loadRecentQuotation() {
+      if (!initialCompanyName) return;
+      try {
+        const res = await fetch(`/api/quotations?companyName=${encodeURIComponent(initialCompanyName)}&pageSize=1`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.items && json.items.length > 0) {
+            const recent = json.items[0];
+            setForm((prev) => ({
+              ...prev,
+              quotationNo: recent.quotationNo || prev.quotationNo,
+              freightType: recent.freightType || prev.freightType,
+              originPort: recent.originPort || prev.originPort,
+              destinationPort: recent.destinationPort || prev.destinationPort,
+              containerType: recent.containerType || prev.containerType,
+              volumeWeight: recent.volumeWeight || prev.volumeWeight,
+              commodity: recent.commodity || prev.commodity,
+              routing: recent.routing || prev.routing,
+              vesselSchedule: recent.vesselSchedule || prev.vesselSchedule,
+              transitTime: recent.transitTime || prev.transitTime,
+              freeDays: recent.freeDays || prev.freeDays,
+              spaceAvailability: recent.spaceAvailability || prev.spaceAvailability,
+              notes: recent.notes || prev.notes,
+              validUntilText: recent.validUntilText || prev.validUntilText,
+            }));
+            if (recent.items && recent.items.length > 0) {
+              setItems(
+                recent.items.map((it: any) => ({
+                  chargeDescription: it.chargeDescription,
+                  rateCurrency: it.rateCurrency,
+                  rateAmount: it.rateAmount,
+                  unit: it.unit,
+                  remarks: it.remarks || "",
+                }))
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load recent quotation", err);
+      }
+    }
+    loadRecentQuotation();
+  }, [initialCompanyName]);
 
   const setField = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
 

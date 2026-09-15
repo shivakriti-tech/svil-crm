@@ -60,6 +60,8 @@ export async function PATCH(
       ...(body.commodity !== undefined && { commodity: body.commodity }),
       ...(body.exim && { exim: body.exim }),
       ...(body.shipmentType && { shipmentType: body.shipmentType }),
+      ...(body.incoTerms !== undefined && { incoTerms: body.incoTerms || null }),
+      ...(body.inquiryType !== undefined && { inquiryType: body.inquiryType || "Export" }),
       ...(body.containerVolume !== undefined && { containerVolume: body.containerVolume }),
       ...(body.weightKgs !== undefined && { weightKgs: body.weightKgs }),
       ...(body.shippingLineId !== undefined && { shippingLineId: body.shippingLineId || null }),
