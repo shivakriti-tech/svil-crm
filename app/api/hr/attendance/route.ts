@@ -13,9 +13,9 @@ export async function GET(req: NextRequest) {
   const role = (session.user as any)?.role || "SALES";
   const userEmail = session.user.email?.toLowerCase().trim();
   const userName = session.user.name?.trim();
-  const isAdminOrManager = role === "ADMIN" || role === "MANAGER";
+  const isHRAdmin = role === "ADMIN" || role === "MANAGER" || role === "FINANCE" || userEmail === "devika@siddhivinayaklogistics.co.in";
 
-  const empWhere: any = !isAdminOrManager
+  const empWhere: any = !isHRAdmin
     ? {
         OR: [
           ...(userEmail ? [{ profile: { email: { equals: userEmail } } }] : []),

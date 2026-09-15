@@ -68,6 +68,25 @@ export async function GET(req: NextRequest) {
     jobWhere.createdAt = dateFilter;
   }
 
+  const userRole = (session.user as any)?.role || "SALES";
+  const sessionUserId = (session.user as any)?.id;
+  const sessionEmail = session.user?.email?.trim().toLowerCase();
+  const sessionName = session.user?.name?.trim();
+
+  // Scoping: SALES team members (Chirag, Yash, Jinal, Yogesh) only see their own jobs' finance records.
+  // Finance (Devika), Operations (Urvish, Aafrin, Kamal), and Admin see all finance records.
+  const isSalesScoped = userRole === "SALES";
+  if (isSalesScoped) {
+    const userConditions: any[] = [];
+    if (sessionUserId) userConditions.push({ responsibleId: sessionUserId });
+    if (sessionEmail) userConditions.push({ responsible: { email: { equals: sessionEmail } } });
+    if (sessionName) userConditions.push({ responsible: { name: { equals: sessionName } } });
+    if (userConditions.length > 0) {
+      jobWhere.AND = jobWhere.AND || [];
+      jobWhere.AND.push({ OR: userConditions });
+    }
+  }
+
   const financeWhere: any = { job: jobWhere };
   if (invoiceStatus) financeWhere.invoiceStatus = invoiceStatus;
 

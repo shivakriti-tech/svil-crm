@@ -65,6 +65,12 @@ export default function ReportsPage() {
     }
   }, [loadReports, fromDate, toDate]);
 
+  useEffect(() => {
+    if (data?.canViewOverview === false && activeTab === "overview") {
+      setActiveTab("conversion");
+    }
+  }, [data, activeTab]);
+
   const handleTimeframeChange = (tf: TimeframeType) => {
     setTimeframe(tf);
     const now = new Date();
@@ -375,7 +381,7 @@ export default function ReportsPage() {
           { id: "conversion", label: "Lead Conversion Report" },
           { id: "employee", label: "Employee Performance Report" },
           { id: "shipments", label: "Shipment Summary Report" },
-          { id: "overview", label: "Financial & Status Overview" },
+          ...(data?.canViewOverview !== false ? [{ id: "overview", label: "Financial & Status Overview" }] : []),
         ].map((tab) => (
           <button
             key={tab.id}

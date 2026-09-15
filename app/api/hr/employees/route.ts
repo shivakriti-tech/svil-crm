@@ -9,10 +9,10 @@ export async function GET(req: NextRequest) {
   const role = (session.user as any)?.role || "SALES";
   const userEmail = session.user.email?.toLowerCase().trim();
   const userName = session.user.name?.trim();
-  const isAdminOrManager = role === "ADMIN" || role === "MANAGER";
+  const isHRAdmin = role === "ADMIN" || role === "MANAGER" || role === "FINANCE" || userEmail === "devika@siddhivinayaklogistics.co.in";
 
   // Non-admin / regular employees only see their own profile
-  const where: any = !isAdminOrManager
+  const where: any = !isHRAdmin
     ? {
         OR: [
           ...(userEmail ? [{ profile: { email: { equals: userEmail } } }] : []),
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     orderBy: { name: "asc" },
   });
 
-  return NextResponse.json({ items: employees, isScoped: !isAdminOrManager });
+  return NextResponse.json({ items: employees, isScoped: !isHRAdmin });
 }
 
 export async function POST(req: NextRequest) {
@@ -37,8 +37,10 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const role = (session.user as any)?.role || "SALES";
-  if (role !== "ADMIN" && role !== "MANAGER") {
-    return NextResponse.json({ error: "Only Admin or Manager can create or edit employee master records" }, { status: 403 });
+  const userEmail = session.user.email?.toLowerCase().trim();
+  const isHRAdmin = role === "ADMIN" || role === "MANAGER" || role === "FINANCE" || userEmail === "devika@siddhivinayaklogistics.co.in";
+  if (!isHRAdmin) {
+    return NextResponse.json({ error: "Only Admin, Manager, or Finance (Devika) can create or edit employee master records" }, { status: 403 });
   }
 
   try {

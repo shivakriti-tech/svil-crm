@@ -20,9 +20,9 @@ export async function GET(req: NextRequest) {
   const role = (session.user as any)?.role || "SALES";
   const userEmail = session.user.email?.toLowerCase().trim();
   const userName = session.user.name?.trim();
-  const isAdminOrManager = role === "ADMIN" || role === "MANAGER";
+  const isHRAdmin = role === "ADMIN" || role === "MANAGER" || role === "FINANCE" || userEmail === "devika@siddhivinayaklogistics.co.in";
 
-  const empWhere: any = !isAdminOrManager
+  const empWhere: any = !isHRAdmin
     ? {
         OR: [
           ...(userEmail ? [{ profile: { email: { equals: userEmail } } }] : []),
@@ -161,8 +161,10 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const role = (session.user as any)?.role || "SALES";
-  if (role !== "ADMIN" && role !== "MANAGER") {
-    return NextResponse.json({ error: "Only Admin or Manager can modify payroll records" }, { status: 403 });
+  const userEmail = session.user.email?.toLowerCase().trim();
+  const isHRAdmin = role === "ADMIN" || role === "MANAGER" || role === "FINANCE" || userEmail === "devika@siddhivinayaklogistics.co.in";
+  if (!isHRAdmin) {
+    return NextResponse.json({ error: "Only Admin, Manager, or Finance (Devika) can modify payroll records" }, { status: 403 });
   }
 
   try {

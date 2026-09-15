@@ -48,6 +48,25 @@ export async function GET(request: Request) {
       endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     }
 
+    const sessionUserRole = (session.user as any)?.role || "SALES";
+    const sessionUserId = (session.user as any)?.id;
+    const sessionEmail = session.user?.email?.trim().toLowerCase();
+    const sessionName = session.user?.name?.trim();
+
+    // 1. Sales Team Scoping (Chirag, Yash, Jinal, Yogesh):
+    // Sales users are strictly scoped to their own activity/performance
+    const isSalesScoped = sessionUserRole === "SALES";
+    let effectiveEmployeeId = employeeId;
+    if (isSalesScoped) {
+      effectiveEmployeeId = sessionUserId;
+    }
+
+    // 2. Kamal Scoping:
+    // - Exclude Shrikar from reports
+    // - No rights to Financial & Status Overview
+    const isKamal = sessionEmail === "kamal@siddhivinayaklogistics.co.in";
+    const canViewOverview = !isKamal;
+
     // Inquiries where clause
     const inqWhere: any = {
       inquiryDate: {
@@ -55,8 +74,8 @@ export async function GET(request: Request) {
         lte: endDate,
       },
     };
-    if (employeeId) {
-      inqWhere.responsibleId = employeeId;
+    if (effectiveEmployeeId) {
+      inqWhere.responsibleId = effectiveEmployeeId;
     }
 
     // Jobs where clause
@@ -66,20 +85,21 @@ export async function GET(request: Request) {
         lte: endDate,
       },
     };
-    if (employeeId) {
-      jobWhere.responsibleId = employeeId;
+    if (effectiveEmployeeId) {
+      jobWhere.responsibleId = effectiveEmployeeId;
     }
 
     // Fetch parallel dataset
     const [
-      allUsers,
-      inquiriesInPeriod,
-      jobsInPeriod,
+      rawAllUsers,
+      rawInquiriesInPeriod,
+      rawJobsInPeriod,
       allActiveJobs,
       allOverdueJobs,
       financeAggregates,
     ] = await Promise.all([
       prisma.user.findMany({
+        where: isSalesScoped && sessionUserId ? { id: sessionUserId } : {},
         select: { id: true, name: true, email: true, role: true },
         orderBy: { name: "asc" },
       }),
@@ -87,7 +107,7 @@ export async function GET(request: Request) {
         where: inqWhere,
         include: {
           customer: { select: { id: true, name: true } },
-          responsible: { select: { id: true, name: true } },
+          responsible: { select: { id: true, name: true, email: true } },
           shippingLine: { select: { id: true, name: true } },
           job: {
             select: {
@@ -105,30 +125,45 @@ export async function GET(request: Request) {
         where: jobWhere,
         include: {
           customer: { select: { id: true, name: true } },
-          responsible: { select: { id: true, name: true } },
+          responsible: { select: { id: true, name: true, email: true } },
           liner: { select: { id: true, name: true } },
           finance: true,
           inquiry: { select: { id: true, inquiryNo: true, status: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.job.count({ where: { isCompleted: false } }),
+      prisma.job.count({ where: { isCompleted: false, ...(effectiveEmployeeId ? { responsibleId: effectiveEmployeeId } : {}) } }),
       prisma.job.count({
         where: {
           isCompleted: false,
           eta: { lt: now },
           currentStatus: { not: "DELIVERED" },
+          ...(effectiveEmployeeId ? { responsibleId: effectiveEmployeeId } : {}),
         },
       }),
       prisma.finance.aggregate({
         where: {
           job: {
             createdAt: { gte: startDate, lte: endDate },
+            ...(effectiveEmployeeId ? { responsibleId: effectiveEmployeeId } : {}),
           },
         },
         _sum: { sale: true, buy: true, cost: true, margin: true, saleUsd: true },
       }),
     ]);
+
+    // Kamal Scoping: Filter out Shrikar completely from dataset
+    const allUsers = isKamal
+      ? rawAllUsers.filter((u) => u.email?.toLowerCase() !== "shrikar@siddhivinayaklogistics.co.in" && u.name?.toLowerCase() !== "shrikar")
+      : rawAllUsers;
+
+    const inquiriesInPeriod = isKamal
+      ? rawInquiriesInPeriod.filter((i) => i.responsible?.email?.toLowerCase() !== "shrikar@siddhivinayaklogistics.co.in" && i.responsible?.name?.toLowerCase() !== "shrikar")
+      : rawInquiriesInPeriod;
+
+    const jobsInPeriod = isKamal
+      ? rawJobsInPeriod.filter((j) => j.responsible?.email?.toLowerCase() !== "shrikar@siddhivinayaklogistics.co.in" && j.responsible?.name?.toLowerCase() !== "shrikar")
+      : rawJobsInPeriod;
 
     // ─────────────────────────────────────────────
     // 1. LEAD CONVERSION METRICS
@@ -309,6 +344,8 @@ export async function GET(request: Request) {
         startFormatted: startDate.toISOString().split("T")[0],
         endFormatted: endDate.toISOString().split("T")[0],
       },
+      canViewOverview,
+      isSalesScoped,
       summary: {
         totalInquiries,
         bookedInquiries,
@@ -319,10 +356,10 @@ export async function GET(request: Request) {
         invoicedShipments: invoicedShipmentsInPeriod,
         allActiveJobsSystem: allActiveJobs,
         allOverdueJobsSystem: allOverdueJobs,
-        revenueInr: Number(financeAggregates._sum.sale || 0),
-        revenueUsd: Number(financeAggregates._sum.saleUsd || 0),
-        costInr: Number(financeAggregates._sum.buy || 0) + Number(financeAggregates._sum.cost || 0),
-        marginInr: Number(financeAggregates._sum.margin || 0),
+        revenueInr: canViewOverview ? Number(financeAggregates._sum.sale || 0) : 0,
+        revenueUsd: canViewOverview ? Number(financeAggregates._sum.saleUsd || 0) : 0,
+        costInr: canViewOverview ? (Number(financeAggregates._sum.buy || 0) + Number(financeAggregates._sum.cost || 0)) : 0,
+        marginInr: canViewOverview ? Number(financeAggregates._sum.margin || 0) : 0,
       },
       leadConversion: {
         totalInquiries,

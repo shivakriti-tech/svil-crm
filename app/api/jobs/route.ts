@@ -26,6 +26,50 @@ export async function GET(req: NextRequest) {
 
   const andConditions: any[] = [{ isCompleted: completed }];
 
+  // Scoping: SALES team members (Chirag, Yash, Jinal, Yogesh) only see their own jobs.
+  const isSalesScoped = userRole === "SALES";
+  if (isSalesScoped) {
+    const userConditions: any[] = [];
+    if (sessionUserId) userConditions.push({ responsibleId: sessionUserId });
+    if (sessionEmail) userConditions.push({ responsible: { email: { equals: sessionEmail } } });
+    if (sessionName) userConditions.push({ responsible: { name: { equals: sessionName } } });
+    if (userConditions.length > 0) {
+      andConditions.push({ OR: userConditions });
+    }
+  }
+
+  // Scoping: Aafrin can view all employees' jobs, but ONLY EXPORTS (no import jobs)
+  if (sessionEmail === "aafrin@siddhivinayaklogistics.co.in") {
+    andConditions.push({
+      AND: [
+        {
+          OR: [
+            { legacyJobId: null },
+            { NOT: { legacyJobId: { startsWith: "FI" } } },
+          ],
+        },
+        {
+          OR: [
+            { legacyJobId: null },
+            { NOT: { legacyJobId: { startsWith: "LI" } } },
+          ],
+        },
+        {
+          OR: [
+            { inquiry: null },
+            { inquiry: { inquiryType: { not: "Import" } } },
+          ],
+        },
+        {
+          OR: [
+            { inquiry: null },
+            { inquiry: { exim: { notIn: ["IM", "IMP"] } } },
+          ],
+        },
+      ],
+    });
+  }
+
   if (responsibleId) {
     andConditions.push({ responsibleId });
   }

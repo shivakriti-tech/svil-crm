@@ -36,8 +36,10 @@ export const DESIGNATIONS = [
 ];
 
 export default function HrPage() {
-  const { isAdmin, isManager, user } = usePermissions();
-  const isScoped = !isAdmin && !isManager;
+  const { isAdmin, isManager, role, user } = usePermissions();
+  const isFinance = role === "FINANCE" || user?.email?.toLowerCase().trim() === "devika@siddhivinayaklogistics.co.in";
+  const isHRAdmin = isAdmin || isManager || isFinance;
+  const isScoped = !isHRAdmin;
 
   const [activeTab, setActiveTab] = useState<HrTab>("attendance");
   const [attendanceView, setAttendanceView] = useState<AttendanceView>("daily");

@@ -55,6 +55,35 @@ export async function GET(req: NextRequest) {
     };
   }
 
+  const userRole = (session.user as any)?.role || "SALES";
+  const sessionUserId = (session.user as any)?.id;
+  const sessionEmail = session.user?.email?.trim().toLowerCase();
+  const sessionName = session.user?.name?.trim();
+
+  // Scoping: SALES team members (Chirag, Yash, Jinal, Yogesh) only see their own inquiries.
+  // Operations (Urvish, Aafrin, Kamal), Finance (Devika), and Admin see all inquiries.
+  const isSalesScoped = userRole === "SALES";
+  if (isSalesScoped) {
+    const userConditions: any[] = [];
+    if (sessionUserId) userConditions.push({ responsibleId: sessionUserId });
+    if (sessionUserId) userConditions.push({ createdById: sessionUserId });
+    if (sessionEmail) userConditions.push({ responsible: { email: { equals: sessionEmail } } });
+    if (sessionName) userConditions.push({ responsible: { name: { equals: sessionName } } });
+    if (sessionEmail) userConditions.push({ createdBy: { email: { equals: sessionEmail } } });
+
+    if (userConditions.length > 0) {
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: userConditions },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = userConditions;
+      }
+    }
+  }
+
   // Fetch inquiries, total count, and workload aggregation in parallel (LIFO order: newest created first)
   const [items, total, workloadRaw, usersList] = await Promise.all([
     prisma.inquiry.findMany({

@@ -57,16 +57,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Enforce role-based scoping (Sales users only see their own quotations)
+  // Enforce role-based scoping (Only SALES users see their own quotations)
   const userRole = (session.user as any)?.role || "SALES";
   const sessionUserId = (session.user as any)?.id;
   const sessionEmail = session.user?.email?.trim().toLowerCase();
-  const isAdminOrManager = userRole === "ADMIN" || userRole === "MANAGER";
+  const sessionName = session.user?.name?.trim();
+  const isSalesScoped = userRole === "SALES";
 
-  if (!isAdminOrManager) {
+  if (isSalesScoped) {
     const userConditions: any[] = [];
     if (sessionUserId) userConditions.push({ createdById: sessionUserId });
     if (sessionEmail) userConditions.push({ createdBy: { email: { equals: sessionEmail } } });
+    if (sessionName) userConditions.push({ createdBy: { name: { equals: sessionName } } });
 
     if (userConditions.length > 0) {
       if (where.OR) {
