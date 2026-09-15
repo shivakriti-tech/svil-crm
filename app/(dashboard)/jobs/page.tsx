@@ -288,21 +288,68 @@ export default function JobsPage() {
 
       {/* Jobs Table with Expandable Rows */}
       <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="table-responsive">
-          <table className="data-table">
+        <div className="table-responsive" style={{ maxHeight: "calc(100vh - 240px)", overflowY: "auto", overflowX: "auto", position: "relative" }}>
+          <table className="data-table" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
-              <tr>
-                <th style={{ width: "36px" }}></th>
-                <th>Job ID</th>
-                <th>Party Name</th>
-                <th>Route (POL &rarr; POD)</th>
-                <th>ETD / ETA</th>
-                <th>Container</th>
-                <th>HBL / MBL</th>
-                <th>Status</th>
-                <th>Invoice Status</th>
-                <th>Billing (USD &rarr; INR)</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+              <tr style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--card-bg, #ffffff)" }}>
+                {/* Column 1: Expand Button */}
+                <th
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    left: 0,
+                    zIndex: 30,
+                    background: "var(--card-bg, #ffffff)",
+                    width: "36px",
+                    minWidth: "36px",
+                    maxWidth: "36px",
+                    borderBottom: "1px solid var(--border-color)",
+                  }}
+                ></th>
+
+                {/* Column 2: Job ID */}
+                <th
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    left: "36px",
+                    zIndex: 30,
+                    background: "var(--card-bg, #ffffff)",
+                    width: "130px",
+                    minWidth: "130px",
+                    borderBottom: "1px solid var(--border-color)",
+                  }}
+                >
+                  Job ID
+                </th>
+
+                {/* Column 3: Party Name */}
+                <th
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    left: "166px",
+                    zIndex: 30,
+                    background: "var(--card-bg, #ffffff)",
+                    width: "190px",
+                    minWidth: "190px",
+                    borderRight: "2px solid var(--border-color)",
+                    borderBottom: "1px solid var(--border-color)",
+                    boxShadow: "3px 0 6px -2px rgba(0,0,0,0.08)",
+                  }}
+                >
+                  Party Name
+                </th>
+
+                {/* Other columns */}
+                <th style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--card-bg, #ffffff)", borderBottom: "1px solid var(--border-color)" }}>Route (POL &rarr; POD)</th>
+                <th style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--card-bg, #ffffff)", borderBottom: "1px solid var(--border-color)" }}>ETD / ETA</th>
+                <th style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--card-bg, #ffffff)", borderBottom: "1px solid var(--border-color)" }}>Container</th>
+                <th style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--card-bg, #ffffff)", borderBottom: "1px solid var(--border-color)" }}>HBL / MBL</th>
+                <th style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--card-bg, #ffffff)", borderBottom: "1px solid var(--border-color)" }}>Status</th>
+                <th style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--card-bg, #ffffff)", borderBottom: "1px solid var(--border-color)" }}>Invoice Status</th>
+                <th style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--card-bg, #ffffff)", borderBottom: "1px solid var(--border-color)" }}>Billing (USD &rarr; INR)</th>
+                <th style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--card-bg, #ffffff)", borderBottom: "1px solid var(--border-color)", textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -320,6 +367,14 @@ export default function JobsPage() {
                   const rateEx = job.finance?.exchangeRate || 87.5;
                   const rateInr = job.finance?.sale || (rateUsd * rateEx);
 
+                  const rowBg = job.attentionFlag
+                    ? "rgba(245, 158, 11, 0.08)"
+                    : overdue
+                    ? "rgba(239, 68, 68, 0.08)"
+                    : isExpanded
+                    ? "var(--card-hover-bg, #f8fafc)"
+                    : "var(--card-bg, #ffffff)";
+
                   return (
                     <React.Fragment key={job.id}>
                       <tr
@@ -328,7 +383,20 @@ export default function JobsPage() {
                         onClick={() => toggleExpand(job.id)}
                       >
                         {/* Expand Chevron */}
-                        <td style={{ textAlign: "center", padding: "8px 4px" }}>
+                        <td
+                          style={{
+                            position: "sticky",
+                            left: 0,
+                            zIndex: 5,
+                            background: rowBg,
+                            textAlign: "center",
+                            padding: "8px 4px",
+                            width: "36px",
+                            minWidth: "36px",
+                            maxWidth: "36px",
+                            borderBottom: "1px solid var(--border-color)",
+                          }}
+                        >
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); toggleExpand(job.id); }}
@@ -353,7 +421,17 @@ export default function JobsPage() {
                         </td>
 
                         {/* Job ID */}
-                        <td>
+                        <td
+                          style={{
+                            position: "sticky",
+                            left: "36px",
+                            zIndex: 5,
+                            background: rowBg,
+                            width: "130px",
+                            minWidth: "130px",
+                            borderBottom: "1px solid var(--border-color)",
+                          }}
+                        >
                           <div>
                             <Link
                               href={`/jobs/${job.id}`}
@@ -369,7 +447,21 @@ export default function JobsPage() {
                         </td>
 
                         {/* Party Name */}
-                        <td style={{ fontWeight: 600, color: "var(--text-main)" }}>
+                        <td
+                          style={{
+                            position: "sticky",
+                            left: "166px",
+                            zIndex: 5,
+                            background: rowBg,
+                            fontWeight: 600,
+                            color: "var(--text-main)",
+                            width: "190px",
+                            minWidth: "190px",
+                            borderRight: "2px solid var(--border-color)",
+                            borderBottom: "1px solid var(--border-color)",
+                            boxShadow: "3px 0 6px -2px rgba(0,0,0,0.08)",
+                          }}
+                        >
                           {job.partyName}
                           {job.attentionFlag && (
                             <span style={{ marginLeft: "6px", color: "#f59e0b", background: "rgba(245, 158, 11, 0.15)", padding: "1px 5px", borderRadius: "4px", fontSize: "0.65rem", fontWeight: 700 }}>
