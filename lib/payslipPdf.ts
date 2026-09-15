@@ -74,19 +74,21 @@ export function generatePayslipPdf(data: PayslipData, action: "download" | "prin
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = 14;
 
-  // Header Box / Banner
-  doc.setFillColor(15, 23, 42); // Slate 900
-  doc.rect(14, y, pageWidth - 28, 22, "F");
+  // Header Box / Banner (Clean white background)
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(14, y, pageWidth - 28, 22, 2, 2, "FD");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(255, 255, 255);
-  doc.text("SIDDHI VINAYAK INTERNATIONAL LOGISTICS", pageWidth / 2, y + 8, { align: "center" });
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text("SIDDHI VINAYAK INTERNATIONAL LOGISTICS", pageWidth / 2, y + 7.5, { align: "center" });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(203, 213, 225);
-  doc.text("4th floor, 18 E and F, Lotus aura 1, Sama Savli, Main Road, Opp.Lilleria Party Plot, Vadodara, Gujarat 390024", pageWidth / 2, y + 14, { align: "center" });
+  doc.setFontSize(7.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text("4th floor, 18 E and F, Lotus aura 1, Sama Savli, Main Road, Opp.Lilleria Party Plot, Vadodara, Gujarat 390024", pageWidth / 2, y + 13.5, { align: "center" });
   doc.text("Mo No. : +91 9725369740 | Email: sv.internationallogistics@gmail.com", pageWidth / 2, y + 18, { align: "center" });
 
   y += 28;
