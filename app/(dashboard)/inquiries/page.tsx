@@ -41,11 +41,18 @@ export default function InquiriesPage() {
   const [editInquiry, setEditInquiry] = useState<any>(null);
   const [masters, setMasters] = useState<any>({});
 
+  const formatLocalDateString = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
   // Filter states
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [responsible, setResponsible] = useState("");
-  const [timeframe, setTimeframe] = useState<TimeframeType>("this_month");
+  const [timeframe, setTimeframe] = useState<TimeframeType>("all");
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [page, setPage] = useState(1);
@@ -53,43 +60,32 @@ export default function InquiriesPage() {
 
   const followupFilter = searchParams.get("filter") === "followup";
 
-  // Initialize current month date window
-  useEffect(() => {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
-    setFromDate(firstDay);
-    setToDate(lastDay);
-  }, []);
-
   const handleTimeframeChange = (tf: TimeframeType) => {
     setTimeframe(tf);
     const now = new Date();
     if (tf === "this_week") {
       const day = now.getDay();
       const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      const start = new Date(now.setDate(diff));
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      setFromDate(start.toISOString().split("T")[0]);
-      setToDate(end.toISOString().split("T")[0]);
+      const start = new Date(now.getFullYear(), now.getMonth(), diff);
+      const end = new Date(now.getFullYear(), now.getMonth(), diff + 6);
+      setFromDate(formatLocalDateString(start));
+      setToDate(formatLocalDateString(end));
     } else if (tf === "last_week") {
       const day = now.getDay();
       const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
-      const start = new Date(now.setDate(diff));
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      setFromDate(start.toISOString().split("T")[0]);
-      setToDate(end.toISOString().split("T")[0]);
+      const start = new Date(now.getFullYear(), now.getMonth(), diff);
+      const end = new Date(now.getFullYear(), now.getMonth(), diff + 6);
+      setFromDate(formatLocalDateString(start));
+      setToDate(formatLocalDateString(end));
     } else if (tf === "this_month") {
-      setFromDate(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]);
-      setToDate(new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]);
+      setFromDate(formatLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setToDate(formatLocalDateString(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
     } else if (tf === "last_month") {
-      setFromDate(new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0]);
-      setToDate(new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0]);
+      setFromDate(formatLocalDateString(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
+      setToDate(formatLocalDateString(new Date(now.getFullYear(), now.getMonth(), 0)));
     } else if (tf === "this_year") {
-      setFromDate(new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0]);
-      setToDate(new Date(now.getFullYear(), 11, 31).toISOString().split("T")[0]);
+      setFromDate(formatLocalDateString(new Date(now.getFullYear(), 0, 1)));
+      setToDate(formatLocalDateString(new Date(now.getFullYear(), 11, 31)));
     } else if (tf === "all") {
       setFromDate("");
       setToDate("");
@@ -299,7 +295,7 @@ export default function InquiriesPage() {
             ))}
           </select>
 
-          {(search || status || responsible || timeframe !== "this_month" || followupFilter) && (
+          {(search || status || responsible || timeframe !== "all" || fromDate || toDate || followupFilter) && (
             <button
               id="btn-clear-inquiry-filters"
               className="btn btn-secondary btn-sm"
@@ -307,7 +303,7 @@ export default function InquiriesPage() {
                 setSearch("");
                 setStatus("");
                 setResponsible("");
-                handleTimeframeChange("this_month");
+                handleTimeframeChange("all");
                 setPage(1);
                 if (followupFilter) router.push("/inquiries");
               }}

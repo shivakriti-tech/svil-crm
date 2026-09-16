@@ -20,7 +20,33 @@ async function check() {
 
   console.log("=== LIVE DATABASE STATUS ===");
   console.log("Users in system:", users);
-  console.log("Inquiries count:", inq);
+  const fromDate = "2026-08-31";
+  const toDate = "2026-09-29";
+  const where = {};
+  if (fromDate || toDate) {
+    where.inquiryDate = {};
+    if (fromDate) where.inquiryDate.gte = new Date(fromDate);
+    if (toDate) {
+      const t = new Date(toDate);
+      t.setHours(23, 59, 59, 999);
+      where.inquiryDate.lte = t;
+    }
+  }
+  const apiTest = await prisma.inquiry.findMany({
+    where,
+    include: {
+      customer: true,
+      responsible: { select: { id: true, name: true, email: true } },
+      shippingLine: { select: { id: true, name: true } },
+      job: { select: { id: true, jobId: true } },
+    }
+  });
+  console.log("SIMULATED API QUERY RESULT COUNT:", apiTest.length);
+  if (apiTest.length === 0) {
+    console.log("WHERE CLAUSE WAS:", JSON.stringify(where, null, 2));
+    const first5 = await prisma.inquiry.findMany({ take: 5, select: { id: true, inquiryNo: true, inquiryDate: true } });
+    console.log("FIRST 5 INQUIRY DATES:", first5);
+  }
   console.log("Jobs / Shipments count:", jobs);
   console.log("Quotations count:", quotes);
   console.log("Employees count:", emps);
