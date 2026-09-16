@@ -60,16 +60,14 @@ export async function GET(req: NextRequest) {
   const sessionEmail = session.user?.email?.trim().toLowerCase();
   const sessionName = session.user?.name?.trim();
 
-  // Scoping: SALES team members (Chirag, Yash, Jinal, Yogesh) only see their own inquiries.
+  // Scoping: SALES team members (Chirag, Yash, Jinal, Yogesh, Shrikar) only see their own inquiries.
   // Operations (Urvish, Aafrin, Kamal), Finance (Devika), and Admin see all inquiries.
   const isSalesScoped = userRole === "SALES";
   if (isSalesScoped) {
     const userConditions: any[] = [];
     if (sessionUserId) userConditions.push({ responsibleId: sessionUserId });
-    if (sessionUserId) userConditions.push({ createdById: sessionUserId });
     if (sessionEmail) userConditions.push({ responsible: { email: { equals: sessionEmail } } });
-    if (sessionName) userConditions.push({ responsible: { name: { equals: sessionName } } });
-    if (sessionEmail) userConditions.push({ createdBy: { email: { equals: sessionEmail } } });
+    if (sessionName) userConditions.push({ responsible: { name: { contains: sessionName } } });
 
     if (userConditions.length > 0) {
       if (where.OR) {

@@ -16,8 +16,10 @@ export async function GET(request: Request) {
     const employeeId = searchParams.get("employeeId") || "";
 
     const now = new Date();
-    let startDate: Date;
-    let endDate: Date;
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    let dateFilter: { gte?: Date; lte?: Date } | null = null;
 
     if (timeframe === "this_week") {
       const day = now.getDay();
@@ -26,6 +28,7 @@ export async function GET(request: Request) {
       endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + 6);
       endDate.setHours(23, 59, 59, 999);
+      dateFilter = { gte: startDate, lte: endDate };
     } else if (timeframe === "last_week") {
       const day = now.getDay();
       const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
@@ -33,19 +36,28 @@ export async function GET(request: Request) {
       endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + 6);
       endDate.setHours(23, 59, 59, 999);
+      dateFilter = { gte: startDate, lte: endDate };
     } else if (timeframe === "last_month") {
       startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
       endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      dateFilter = { gte: startDate, lte: endDate };
     } else if (timeframe === "this_year") {
       startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
       endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+      dateFilter = { gte: startDate, lte: endDate };
     } else if (timeframe === "custom" && customFrom && customTo) {
       startDate = new Date(`${customFrom}T00:00:00.000Z`);
       endDate = new Date(`${customTo}T23:59:59.999Z`);
+      dateFilter = { gte: startDate, lte: endDate };
+    } else if (timeframe === "all") {
+      startDate = null;
+      endDate = null;
+      dateFilter = null;
     } else {
       // Default: this_month
       startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      dateFilter = { gte: startDate, lte: endDate };
     }
 
     const sessionUserRole = (session.user as any)?.role || "SALES";
@@ -53,7 +65,7 @@ export async function GET(request: Request) {
     const sessionEmail = session.user?.email?.trim().toLowerCase();
     const sessionName = session.user?.name?.trim();
 
-    // 1. Sales Team Scoping (Chirag, Yash, Jinal, Yogesh):
+    // 1. Sales Team Scoping (Chirag, Yash, Jinal, Yogesh, Shrikar):
     // Sales users are strictly scoped to their own activity/performance
     const isSalesScoped = sessionUserRole === "SALES";
     let effectiveEmployeeId = employeeId;
@@ -67,25 +79,39 @@ export async function GET(request: Request) {
     const isKamal = sessionEmail === "kamal@siddhivinayaklogistics.co.in";
     const canViewOverview = !isKamal;
 
-    // Inquiries where clause
-    const inqWhere: any = {
-      inquiryDate: {
-        gte: startDate,
-        lte: endDate,
-      },
-    };
-    if (effectiveEmployeeId) {
-      inqWhere.responsibleId = effectiveEmployeeId;
-    }
+    // Inquiries & Jobs where clauses
+    const inqWhere: any = dateFilter ? { inquiryDate: dateFilter } : {};
+    const jobWhere: any = dateFilter ? { createdAt: dateFilter } : {};
 
-    // Jobs where clause
-    const jobWhere: any = {
-      createdAt: {
-        gte: startDate,
-        lte: endDate,
-      },
-    };
-    if (effectiveEmployeeId) {
+    if (isSalesScoped) {
+      const inqUserConds: any[] = [];
+      if (sessionUserId) inqUserConds.push({ responsibleId: sessionUserId });
+      if (sessionEmail) inqUserConds.push({ responsible: { email: { equals: sessionEmail } } });
+      if (sessionName) inqUserConds.push({ responsible: { name: { contains: sessionName } } });
+      inqWhere.OR = inqUserConds;
+
+      const salesInqs = await prisma.inquiry.findMany({
+        where: { OR: inqUserConds },
+        select: { customerId: true, customer: { select: { name: true } } },
+      });
+      const custIds = Array.from(new Set(salesInqs.map((i) => i.customerId).filter(Boolean)));
+      const custNames = Array.from(new Set(salesInqs.map((i) => i.customer?.name).filter(Boolean)));
+
+      const jobUserConds: any[] = [
+        ...(sessionUserId ? [{ responsibleId: sessionUserId }] : []),
+        ...(sessionEmail ? [{ responsible: { email: { equals: sessionEmail } } }] : []),
+        ...(sessionName ? [{ responsible: { name: { contains: sessionName } } }] : []),
+        {
+          inquiry: {
+            OR: inqUserConds,
+          },
+        },
+        ...(custIds.length > 0 ? [{ customerId: { in: custIds } }] : []),
+        ...(custNames.length > 0 ? [{ partyName: { in: custNames } }] : []),
+      ];
+      jobWhere.OR = jobUserConds;
+    } else if (effectiveEmployeeId) {
+      inqWhere.responsibleId = effectiveEmployeeId;
       jobWhere.responsibleId = effectiveEmployeeId;
     }
 
@@ -132,21 +158,18 @@ export async function GET(request: Request) {
         },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.job.count({ where: { isCompleted: false, ...(effectiveEmployeeId ? { responsibleId: effectiveEmployeeId } : {}) } }),
+      prisma.job.count({ where: { isCompleted: false, ...jobWhere } }),
       prisma.job.count({
         where: {
           isCompleted: false,
           eta: { lt: now },
           currentStatus: { not: "DELIVERED" },
-          ...(effectiveEmployeeId ? { responsibleId: effectiveEmployeeId } : {}),
+          ...jobWhere,
         },
       }),
       prisma.finance.aggregate({
         where: {
-          job: {
-            createdAt: { gte: startDate, lte: endDate },
-            ...(effectiveEmployeeId ? { responsibleId: effectiveEmployeeId } : {}),
-          },
+          job: jobWhere,
         },
         _sum: { sale: true, buy: true, cost: true, margin: true, saleUsd: true },
       }),
@@ -339,10 +362,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       timeframe,
       dateRange: {
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        startFormatted: startDate.toISOString().split("T")[0],
-        endFormatted: endDate.toISOString().split("T")[0],
+        startDate: startDate ? startDate.toISOString() : "",
+        endDate: endDate ? endDate.toISOString() : "",
+        startFormatted: startDate ? startDate.toISOString().split("T")[0] : "",
+        endFormatted: endDate ? endDate.toISOString().split("T")[0] : "",
       },
       canViewOverview,
       isSalesScoped,

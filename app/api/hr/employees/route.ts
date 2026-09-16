@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const role = (session.user as any)?.role || "SALES";
+  const userId = (session.user as any)?.id;
   const userEmail = session.user.email?.toLowerCase().trim();
   const userName = session.user.name?.trim();
   const isHRAdmin = role === "ADMIN" || role === "MANAGER" || role === "FINANCE" || userEmail === "devika@siddhivinayaklogistics.co.in";
@@ -15,8 +16,9 @@ export async function GET(req: NextRequest) {
   const where: any = !isHRAdmin
     ? {
         OR: [
+          ...(userId ? [{ userId: userId }] : []),
           ...(userEmail ? [{ profile: { email: { equals: userEmail } } }] : []),
-          ...(userName ? [{ name: { equals: userName } }] : []),
+          ...(userName ? [{ name: { contains: userName } }] : []),
         ],
       }
     : {};

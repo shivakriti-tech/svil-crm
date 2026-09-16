@@ -73,14 +73,48 @@ export async function GET(req: NextRequest) {
   const sessionEmail = session.user?.email?.trim().toLowerCase();
   const sessionName = session.user?.name?.trim();
 
-  // Scoping: SALES team members (Chirag, Yash, Jinal, Yogesh) only see their own jobs' finance records.
+  // Scoping: SALES team members (Chirag, Yash, Jinal, Yogesh, Shrikar) only see their own jobs' finance records.
   // Finance (Devika), Operations (Urvish, Aafrin, Kamal), and Admin see all finance records.
   const isSalesScoped = userRole === "SALES";
   if (isSalesScoped) {
     const userConditions: any[] = [];
     if (sessionUserId) userConditions.push({ responsibleId: sessionUserId });
     if (sessionEmail) userConditions.push({ responsible: { email: { equals: sessionEmail } } });
-    if (sessionName) userConditions.push({ responsible: { name: { equals: sessionName } } });
+    if (sessionName) userConditions.push({ responsible: { name: { contains: sessionName } } });
+
+    // Also include jobs converted from inquiries assigned to this sales user
+    userConditions.push({
+      inquiry: {
+        OR: [
+          ...(sessionUserId ? [{ responsibleId: sessionUserId }] : []),
+          ...(sessionEmail ? [{ responsible: { email: { equals: sessionEmail } } }] : []),
+          ...(sessionName ? [{ responsible: { name: { contains: sessionName } } }] : []),
+        ],
+      },
+    });
+
+    // Also include jobs for customers associated with this sales user's inquiries
+    const salesInquiries = await prisma.inquiry.findMany({
+      where: {
+        OR: [
+          ...(sessionUserId ? [{ responsibleId: sessionUserId }] : []),
+          ...(sessionEmail ? [{ responsible: { email: { equals: sessionEmail } } }] : []),
+          ...(sessionName ? [{ responsible: { name: { contains: sessionName } } }] : []),
+        ],
+      },
+      select: { customerId: true, customer: { select: { name: true } } },
+    });
+
+    const custIds = Array.from(new Set(salesInquiries.map((i) => i.customerId).filter(Boolean)));
+    const custNames = Array.from(new Set(salesInquiries.map((i) => i.customer?.name).filter(Boolean)));
+
+    if (custIds.length > 0) {
+      userConditions.push({ customerId: { in: custIds } });
+    }
+    if (custNames.length > 0) {
+      userConditions.push({ partyName: { in: custNames } });
+    }
+
     if (userConditions.length > 0) {
       jobWhere.AND = jobWhere.AND || [];
       jobWhere.AND.push({ OR: userConditions });

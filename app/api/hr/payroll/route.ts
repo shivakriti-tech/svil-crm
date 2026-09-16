@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
   const endDate = new Date(year, monthNum - 1, daysInMonth, 23, 59, 59, 999);
 
   const role = (session.user as any)?.role || "SALES";
+  const userId = (session.user as any)?.id;
   const userEmail = session.user.email?.toLowerCase().trim();
   const userName = session.user.name?.trim();
   const isHRAdmin = role === "ADMIN" || role === "MANAGER" || role === "FINANCE" || userEmail === "devika@siddhivinayaklogistics.co.in";
@@ -25,8 +26,9 @@ export async function GET(req: NextRequest) {
   const empWhere: any = !isHRAdmin
     ? {
         OR: [
+          ...(userId ? [{ userId: userId }] : []),
           ...(userEmail ? [{ profile: { email: { equals: userEmail } } }] : []),
-          ...(userName ? [{ name: { equals: userName } }] : []),
+          ...(userName ? [{ name: { contains: userName } }] : []),
         ],
       }
     : {};

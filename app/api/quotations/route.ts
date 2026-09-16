@@ -68,7 +68,29 @@ export async function GET(req: NextRequest) {
     const userConditions: any[] = [];
     if (sessionUserId) userConditions.push({ createdById: sessionUserId });
     if (sessionEmail) userConditions.push({ createdBy: { email: { equals: sessionEmail } } });
-    if (sessionName) userConditions.push({ createdBy: { name: { equals: sessionName } } });
+    if (sessionName) userConditions.push({ createdBy: { name: { contains: sessionName } } });
+
+    // Also include quotations for customers linked to this sales executive's inquiries
+    const salesInquiries = await prisma.inquiry.findMany({
+      where: {
+        OR: [
+          ...(sessionUserId ? [{ responsibleId: sessionUserId }] : []),
+          ...(sessionEmail ? [{ responsible: { email: { equals: sessionEmail } } }] : []),
+          ...(sessionName ? [{ responsible: { name: { contains: sessionName } } }] : []),
+        ],
+      },
+      select: { customerId: true, customer: { select: { name: true } } },
+    });
+
+    const custIds = Array.from(new Set(salesInquiries.map((i) => i.customerId).filter(Boolean)));
+    const custNames = Array.from(new Set(salesInquiries.map((i) => i.customer?.name).filter(Boolean)));
+
+    if (custIds.length > 0) {
+      userConditions.push({ customerId: { in: custIds } });
+    }
+    if (custNames.length > 0) {
+      userConditions.push({ companyName: { in: custNames } });
+    }
 
     if (userConditions.length > 0) {
       if (where.OR) {
